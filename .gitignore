@@ -1,0 +1,17 @@
+# ignore all .log files
+*.log 
+
+# ignore datasets
+data/
+sem_seg/indoor3d_sem_seg_hdf5_data/
+
+# ignore pycache-files
+__pycache__/
+utils/__pycache__/
+sem_seg/__pycache__/
+*.pycache
+*.pyo
+*.pyd
+
+# ignore sem_seg/log6 folder
+sem_seg/log6
