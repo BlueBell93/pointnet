@@ -32,6 +32,23 @@ sudo apt-get install libhdf5-dev
 sudo pip install h5py
 ```
 
+#### How to Setup Miniconda Environment
+To setup mini conda environment, mini conda already has to be installed. Also the nvidia drivers for
+Tensorflow
+
+```
+source ~/conda/etc/profile.d/conda.sh
+conda create -n pointnet
+conda activate pointnet
+sudo apt install libhdf5-dev
+pip install h5py matplotlib numpy open3d tensorboard
+python3 -m pip install tensorflow[and-cuda]
+```
+
+`note`: tensorflow is installed via pip for GPU
+Users (Ubuntu), tested with current tensorflow version 
+2.17.0 (https://storage.googleapis.com/tensorflow/versions/2.17.0/tensorflow-2.17.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl), see [Installation](https://www.tensorflow.org/install/pip).
+
 ### Usage
 To train a model to classify point clouds sampled from 3D shapes:
 
