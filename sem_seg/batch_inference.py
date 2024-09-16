@@ -54,7 +54,8 @@ def evaluate():
         saver = tf.compat.v1.train.Saver()
         
     # Create a session
-    config = tf.ConfigProto()
+    #config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
     config.log_device_placement = True
