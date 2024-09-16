@@ -48,6 +48,19 @@ def create_pointcloud_from_txt_file(txt_file_path):
     return pcd
 
 def visualize_pointcloud(pcd, zoom=0.3412, front=[0.4257, -0.2125, -0.8795], lookat=[2.6172, 2.0475, 1.532], up=[-0.0694, -0.9768, 0.2024]):
+    """
+    Visualisiert eine Punktwolke (PointCloud) mit Open3D.
+
+    Args:
+        pcd (open3d.t.geometry.PointCloud): Die zu visualisierende Punktwolke.
+        zoom (float, optional): Der Zoom-Faktor für die Ansicht. Standard ist 0.3412.
+        front (list, optional): Die Front-Richtung für die Kameraansicht. Standard ist [0.4257, -0.2125, -0.8795].
+        lookat (list, optional): Der Punkt, auf den die Kamera schaut. Standard ist [2.6172, 2.0475, 1.532].
+        up (list, optional): Die Aufwärtsrichtung der Kamera. Standard ist [-0.0694, -0.9768, 0.2024].
+
+    Returns:
+        None
+    """    
     o3d.visualization.draw_geometries([pcd],
                                     zoom=zoom,
                                     front=front,
@@ -55,6 +68,16 @@ def visualize_pointcloud(pcd, zoom=0.3412, front=[0.4257, -0.2125, -0.8795], loo
                                     up=up)
 
 def save_pointcloud_to_ply(inst_seg_pcd_np, file_path):
+    """
+    Speichert eine erweiterte Punktwolke mit Instanz- und Semantiklabels in einer .ply-Datei.
+
+    Args:
+        inst_seg_pcd_np (numpy.ndarray): Die Punktwolke mit Positionen, Farben, semantischen und Instanz-Labels.
+        file_path (str): Pfad, unter dem die .ply-Datei gespeichert werden soll.
+
+    Returns:
+        open3d.t.geometry.PointCloud: Die erweiterte Punktwolke mit Instanz- und Semantiklabels.
+    """
     # create pointcloud
     pcd_extended = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
     pcd_extended.point.positions = inst_seg_pcd_np[:, 0:3] # fuellt sie mit Punkten
@@ -72,6 +95,15 @@ def save_pointcloud_to_ply(inst_seg_pcd_np, file_path):
 
 # create colors for visualization of the instance segmentation results
 def create_colors_for_instance_seg_vis(num_labels):
+    """
+    Erstellt eine Farbtabelle für die Visualisierung der Instanzsegmentierungsergebnisse.
+
+    Args:
+        num_labels (int): Anzahl der verschiedenen Instanzlabels.
+
+    Returns:
+        numpy.ndarray: Array mit RGB-Werten für jede Instanz.
+    """
     #max_label = labels.max().item()
     cmap = plt.get_cmap("tab20", num_labels) # "tab20", "viridis"
     colors = cmap(np.arange(num_labels))
@@ -81,6 +113,16 @@ def create_colors_for_instance_seg_vis(num_labels):
 
 # create pointcloud to show instance segmentation results
 def create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors):
+    """
+    Erzeugt eine Punktwolke für die Visualisierung von Instanzsegmentierungsergebnissen.
+
+    Args:
+        inst_seg_pcd_np (numpy.ndarray): Punktwolke mit Instanzlabels.
+        colors (numpy.ndarray): Array mit Farben für jede Instanz.
+
+    Returns:
+        open3d.t.geometry.PointCloud: Die erweiterte Punktwolke zur Visualisierung.
+    """
     pcd_extended = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
     pcd_extended.point.positions = inst_seg_pcd_np[:, 0:3] # fuellt sie mit Punkten
     inst_labels = (inst_seg_pcd_np[:, 7]).astype(np.uint8)
@@ -89,11 +131,32 @@ def create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors):
 
 # visualize instance segmentation results as a pointcloud
 def vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np):
+    """
+    Visualisiert die Instanzsegmentierungsergebnisse als Punktwolke.
+
+    Args:
+        inst_label_counter (int): Anzahl der verschiedenen Instanzen.
+        inst_seg_pcd_np (numpy.ndarray): Punktwolke mit Instanzlabels.
+
+    Returns:
+        None
+    """
     colors = create_colors_for_instance_seg_vis(inst_label_counter+1)
     pcd = create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors)
     visualize_pointcloud(pcd.to_legacy())
 
 def apply_dbscan_to_semantic_category(semantically_filtered_pcd, eps, min_points):
+    """
+    Wendet DBSCAN-Clusteralgorithmus auf eine semantische Kategorie an, um Instanzen zu trennen.
+
+    Args:
+        semantically_filtered_pcd (numpy.ndarray): Gefilterte Punktwolke mit derselben semantischen Kategorie.
+        eps (float): Maximaler Abstand zwischen zwei Punkten für denselben Cluster.
+        min_points (int): Minimale Anzahl von Punkten für einen Cluster.
+
+    Returns:
+        numpy.ndarray: Array mit den Clusterlabels für jeden Punkt (-1 bedeutet Rauschen).
+    """
     part_pcd =  o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
     part_pcd.point.positions = semantically_filtered_pcd[:, 0:3] # fuellt die pointcloud mit xyz-Daten
     labels = part_pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True) # dbscan
@@ -101,14 +164,37 @@ def apply_dbscan_to_semantic_category(semantically_filtered_pcd, eps, min_points
     return labels
 
 def update_instance_labels(labels, inst_label_noise, inst_label_counter):
-            labels[labels.astype(int) == -1] = inst_label_noise
-            max_label = labels.max()
-            for dbscan_cluster in range(max_label+1):
-                labels[labels.astype(int) == dbscan_cluster] = inst_label_counter
-                inst_label_counter += 1
-            return (labels, inst_label_counter)
+    """
+    Aktualisiert die Instanzlabels nach der DBSCAN-Clustering.
+
+    Args:
+        labels (numpy.ndarray): Die DBSCAN-Clusterlabels (-1 = Rauschen).
+        inst_label_noise (int): Label für Rauschen.
+        inst_label_counter (int): Zähler für die Instanzlabels.
+
+    Returns:
+        tuple: (aktualisierte Labels, aktualisierter Instanzlabelzähler)
+    """
+    labels[labels.astype(int) == -1] = inst_label_noise
+    max_label = labels.max()
+    for dbscan_cluster in range(max_label+1):
+        labels[labels.astype(int) == dbscan_cluster] = inst_label_counter
+        inst_label_counter += 1
+    return (labels, inst_label_counter)
 
 def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
+    """
+    Führt Instanzsegmentierung mit DBSCAN für jede semantische Kategorie in einer Punktwolke durch.
+
+    Args:
+        pcd_np (numpy.ndarray): Punktwolke mit Positionen, Farben und semantischen Labels.
+        num_sem_cls (int, optional): Anzahl der semantischen Klassen. Standard ist 13.
+        eps (float, optional): Maximaler Abstand für DBSCAN. Standard ist 0.4.
+        min_points (int, optional): Minimale Anzahl an Punkten für DBSCAN. Standard ist 10.
+
+    Returns:
+        tuple: (instanzsegmentierte Punktwolke, Zähler der Instanzlabels)
+    """
     inst_label_counter = 1 # zaehlvariable fuer die instanzlabel
     inst_label_noise = 0
     inst_seg_pcd_np = np.empty((0, pcd_np.shape[1]+1)) # stores results
@@ -127,6 +213,8 @@ def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
             result = np.concatenate((semantically_filtered_pcd, np.reshape(labels, (len(labels), 1))), axis=1)
             inst_seg_pcd_np = np.vstack((inst_seg_pcd_np, result))
     return (inst_seg_pcd_np, inst_label_counter)
+
+
 
 txt_dir_path = os.path.join(BASE_DIR, "log6/dump")
 txt_file_name = "Area_6_lounge_1_pred.txt"
