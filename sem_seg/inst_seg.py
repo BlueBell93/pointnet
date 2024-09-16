@@ -73,7 +73,7 @@ def save_pointcloud_to_ply(inst_seg_pcd_np, file_path):
 # create colors for visualization of the instance segmentation results
 def create_colors_for_instance_seg_vis(num_labels):
     #max_label = labels.max().item()
-    cmap = plt.get_cmap("viridis", num_labels)
+    cmap = plt.get_cmap("tab20", num_labels) # "tab20", "viridis"
     colors = cmap(np.arange(num_labels))
     colors = (colors[:, :3] * 255).astype(np.uint8)
     #print(f"colors.shape: {colors.shape}")
@@ -93,6 +93,20 @@ def vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np):
     pcd = create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors)
     visualize_pointcloud(pcd.to_legacy())
 
+def apply_dbscan_to_semantic_category(semantically_filtered_pcd, eps, min_points):
+    part_pcd =  o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
+    part_pcd.point.positions = semantically_filtered_pcd[:, 0:3] # fuellt die pointcloud mit xyz-Daten
+    labels = part_pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True) # dbscan
+    labels = labels.numpy()
+    return labels
+
+def update_instance_labels(labels, inst_label_noise, inst_label_counter):
+            labels[labels.astype(int) == -1] = inst_label_noise
+            max_label = labels.max()
+            for dbscan_cluster in range(max_label+1):
+                labels[labels.astype(int) == dbscan_cluster] = inst_label_counter
+                inst_label_counter += 1
+            return (labels, inst_label_counter)
 
 def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
     inst_label_counter = 1 # zaehlvariable fuer die instanzlabel
@@ -105,23 +119,14 @@ def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
 
         semantically_filtered_pcd = pcd_np[mask, :] # only pointcloud data with the same semantic semantic_cls
 
-        part_pcd =  o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
-        part_pcd.point.positions = semantically_filtered_pcd[:, 0:3] # fuellt die pointcloud mit xyz-Daten
-        labels = part_pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True) # dbscan
-        labels = labels.numpy()
+        labels = apply_dbscan_to_semantic_category(semantically_filtered_pcd, eps, min_points)
         #print(f"labels of dbscan: {labels}")
+
         if len(labels) > 0: 
-            labels[labels.astype(int) == -1] = inst_label_noise
-            max_label = labels.max()
-            #print(f"max_label: {labels.max()}")
-            #print(f"labels.shape: {labels.shape}")
-            for dbscan_cluster in range(max_label+1):
-                labels[labels.astype(int) == dbscan_cluster] = inst_label_counter
-                inst_label_counter += 1
+            labels, inst_label_counter = update_instance_labels(labels, inst_label_noise, inst_label_counter)
             result = np.concatenate((semantically_filtered_pcd, np.reshape(labels, (len(labels), 1))), axis=1)
             inst_seg_pcd_np = np.vstack((inst_seg_pcd_np, result))
-            #labels[labels.astype(int) == -1] = -1
-    return (inst_seg_pcd_np, labels, inst_label_counter)
+    return (inst_seg_pcd_np, inst_label_counter)
 
 txt_dir_path = os.path.join(BASE_DIR, "log6/dump")
 txt_file_name = "Area_6_lounge_1_pred.txt"
@@ -132,7 +137,7 @@ txt_file_path = os.path.join(txt_dir_path, txt_file_name)
         
 # load data from txt file in a numpy array and run instance segmentation
 pcd_np = np.loadtxt(txt_file_path, usecols = (0, 1, 2, 3, 4, 5, 7))
-inst_seg_pcd_np, labels, inst_label_counter = inst_seg_with_dbscan(pcd_np)
+inst_seg_pcd_np, inst_label_counter = inst_seg_with_dbscan(pcd_np)
 
 # store results as txt file
 file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
