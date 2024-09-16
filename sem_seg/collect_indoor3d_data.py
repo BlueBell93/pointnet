@@ -16,7 +16,7 @@ if not os.path.exists(output_folder):
 for anno_path in anno_paths:
     print(anno_path)
     try:
-        elements = anno_path.split('/')
+        elements = anno_path.split('/') # last three are e.g. Area_1/hallway_3/Annotations
         out_filename = elements[-3]+'_'+elements[-2]+'.npy' # Area_1_hallway_1.npy
         indoor3d_util.collect_point_label(anno_path, os.path.join(output_folder, out_filename), 'numpy')
     except:
