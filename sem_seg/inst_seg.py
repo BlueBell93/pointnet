@@ -209,6 +209,12 @@ def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
         #print(f"labels of dbscan: {labels}")
 
         if len(labels) > 0: 
+            # only for visualization of part instance segmented results
+            labels[labels.astype(int) == -1] = inst_label_noise
+            result_without_updated_instance_labels = np.concatenate((semantically_filtered_pcd, np.reshape(labels, (len(labels), 1))), axis=1)
+            print(f"labels.max is {labels.max()+1} for semantic category {semantic_cls}")
+            vis_instance_seg_results(inst_label_counter=labels.max(), inst_seg_pcd_np=result_without_updated_instance_labels)
+            # end of visualization
             labels, inst_label_counter = update_instance_labels(labels, inst_label_noise, inst_label_counter)
             result = np.concatenate((semantically_filtered_pcd, np.reshape(labels, (len(labels), 1))), axis=1)
             inst_seg_pcd_np = np.vstack((inst_seg_pcd_np, result))
