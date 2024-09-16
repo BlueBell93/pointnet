@@ -50,16 +50,18 @@ def collect_point_label(anno_path, out_filename, file_format='txt'):
     points_list = []
     
     for f in glob.glob(os.path.join(anno_path, '*.txt')):
-        cls = os.path.basename(f).split('_')[0]
+        cls = os.path.basename(f).split('_')[0] # gibt den letzten Teil des Pfades zurueck z.B. beam_1.txt
         if cls not in g_classes: # note: in some room there is 'staris' class..
             cls = 'clutter'
-        points = np.loadtxt(f)
-        labels = np.ones((points.shape[0],1)) * g_class2label[cls]
+        points = np.loadtxt(f) # NX6 mit N: Anzahl Punkte und 6 Spalten für xyz,rgb
+        labels = np.ones((points.shape[0],1)) * g_class2label[cls] # Nx1, alle haben dasselbe label
         points_list.append(np.concatenate([points, labels], 1)) # Nx7
+        # 1 heißt entlange der Achse 1, also der Spalte, zusammenfuehren -> zusaetzliche Spalte
     
-    data_label = np.concatenate(points_list, 0)
-    xyz_min = np.amin(data_label, axis=0)[0:3]
-    data_label[:, 0:3] -= xyz_min
+    data_label = np.concatenate(points_list, 0) # an der Achse 0 -> Zeilen
+    xyz_min = np.amin(data_label, axis=0)[0:3] # hier passiert das shiften der Punkte
+    # xyz_min = [x_min, y_min, z_min], als dim = 3
+    data_label[:, 0:3] -= xyz_min # hier passiert das Shiften der Punkte
     
     if file_format=='txt':
         fout = open(out_filename, 'w')
@@ -107,7 +109,7 @@ def point_label_to_obj(input_filename, out_filename, label_color=True, easy_view
 # PREPARE BLOCK DATA FOR DEEPNETS TRAINING/TESTING
 # -----------------------------------------------------------------------------
 
-def sample_data(data, num_sample):
+def sample_data(data, num_sample): # down- oder upsampled, um die Anzahl der Punkte auf einen bestimmten Wert zu bringen
     """ data is in N x ...
         we want to keep num_samplexC of them.
         if N > num_sample, we will randomly keep num_sample of them.
@@ -122,7 +124,8 @@ def sample_data(data, num_sample):
     else:
         sample = np.random.choice(N, num_sample-N)
         dup_data = data[sample, ...]
-        return np.concatenate([data, dup_data], 0), range(N)+list(sample)
+        #return np.concatenate([data, dup_data], 0), range(N)+list(sample)
+        return np.concatenate([data, dup_data], 0), list(range(N)) + sample.tolist() # fix see: https://github.com/charlesq34/pointnet/issues/229
 
 def sample_data_label(data, label, num_sample):
     new_data, sample_indices = sample_data(data, num_sample)
@@ -150,20 +153,31 @@ def room2blocks(data, label, num_point, block_size=1.0, stride=1.0,
         
     TODO: for this version, blocking is in fixed, non-overlapping pattern.
     """
-    assert(stride<=block_size)
-
+    assert(stride<=block_size) # stride ist Abstand, um den die Bloecke verschoben werden
+    #print(f"inside room2blocks")
+    #print(f"data: {data}")
+    #print(f"data.shape: {data.shape}")
     limit = np.amax(data, 0)[0:3]
+    #print(f"limit: {limit}")
      
     # Get the corner location for our sampling blocks    
     xbeg_list = []
     ybeg_list = []
     if not random_sample:
+        # print(f"if not random_sample is true")
+        # print(f"block_size: {block_size}")
+        # print(f"stride: {stride}")
+        # print(f"int(np.ceil((limit[0] - block_size) / stride)): {int(np.ceil((limit[0] - block_size) / stride))}")
         num_block_x = int(np.ceil((limit[0] - block_size) / stride)) + 1
         num_block_y = int(np.ceil((limit[1] - block_size) / stride)) + 1
+        # print(f"num_block_x: {num_block_x}")
+        # print(f"num_block_y: {num_block_y}")
         for i in range(num_block_x):
             for j in range(num_block_y):
-                xbeg_list.append(i*stride)
-                ybeg_list.append(j*stride)
+                xbeg_list.append(i*stride) # dim = num_block_x * num_block_y
+                ybeg_list.append(j*stride) # dim = num_block_x * num_block_y
+        # print(f"xbeg_list: {xbeg_list}")
+        # print(f"ybeg_list: {ybeg_list}")
     else:
         num_block_x = int(np.ceil(limit[0] / block_size))
         num_block_y = int(np.ceil(limit[1] / block_size))
@@ -182,18 +196,28 @@ def room2blocks(data, label, num_point, block_size=1.0, stride=1.0,
     for idx in range(len(xbeg_list)): 
        xbeg = xbeg_list[idx]
        ybeg = ybeg_list[idx]
+       # prueft alle Elemente, ob sie innerhalb dieses 1x1 Meter Blocks liegen
        xcond = (data[:,0]<=xbeg+block_size) & (data[:,0]>=xbeg)
        ycond = (data[:,1]<=ybeg+block_size) & (data[:,1]>=ybeg)
-       cond = xcond & ycond
+       cond = xcond & ycond # boolean Array aus N Datenpunkten
+       # print(f"cond: {cond}")
+       # print(f"cond.shape: {cond.shape}")
        if np.sum(cond) < 100: # discard block if there are less than 100 pts.
            continue
        
        block_data = data[cond, :]
        block_label = label[cond]
+
+    #    print(f"block_data: {block_data}")
+    #    print(f"block_data.shape: {block_data.shape}")
+    #    print(f"block_label.shape: {block_label.shape}")
        
        # randomly subsample data
        block_data_sampled, block_label_sampled = \
            sample_data_label(block_data, block_label, num_point)
+       #print(f"block_data: {block_data_sampled}")
+       #print(f"block_data.shape: {block_data_sampled.shape}")
+       #print(f"block_label.shape: {block_label_sampled.shape}")
        block_data_list.append(np.expand_dims(block_data_sampled, 0))
        block_label_list.append(np.expand_dims(block_label_sampled, 0))
             
@@ -229,25 +253,26 @@ def room2blocks_plus_normalized(data_label, num_point, block_size, stride,
     """ room2block, with input filename and RGB preprocessing.
         for each block centralize XYZ, add normalized XYZ as 678 channels
     """
-    data = data_label[:,0:6]
-    data[:,3:6] /= 255.0
-    label = data_label[:,-1].astype(np.uint8)
-    max_room_x = max(data[:,0])
-    max_room_y = max(data[:,1])
-    max_room_z = max(data[:,2])
+    data = data_label[:,0:6] # Vermutung: alle Punkte (pro Zeile ein Punkt) + Spalten aus x, y, z, r, g, b Werten
+    #print(f"inside room2blocks_plus_normalized")
+    data[:,3:6] /= 255.0 # Vermutung: hier werden die Farben normalisiert 
+    label = data_label[:,-1].astype(np.uint8) # Vermutung: letzte Zeile ist das label, wird in ein uint8 gecasted
+    max_room_x = max(data[:,0]) # Vermutung: groesster x-Wert
+    max_room_y = max(data[:,1]) # Vermutung: groesster y-Wert
+    max_room_z = max(data[:,2]) # Vermutung: groesster z-Wert
     
     data_batch, label_batch = room2blocks(data, label, num_point, block_size, stride,
                                           random_sample, sample_num, sample_aug)
-    new_data_batch = np.zeros((data_batch.shape[0], num_point, 9))
-    for b in range(data_batch.shape[0]):
-        new_data_batch[b, :, 6] = data_batch[b, :, 0]/max_room_x
-        new_data_batch[b, :, 7] = data_batch[b, :, 1]/max_room_y
-        new_data_batch[b, :, 8] = data_batch[b, :, 2]/max_room_z
-        minx = min(data_batch[b, :, 0])
-        miny = min(data_batch[b, :, 1])
+    new_data_batch = np.zeros((data_batch.shape[0], num_point, 9)) # Dimension: (?, 4096, 9)
+    for b in range(data_batch.shape[0]): # Vermutung: wir gehen jetzt durch alle Bloecke oder Punkte (???)
+        new_data_batch[b, :, 6] = data_batch[b, :, 0]/max_room_x # Vermutung: Normalisierter x-Wert, eingetragen als 6. Element
+        new_data_batch[b, :, 7] = data_batch[b, :, 1]/max_room_y # Vermutung: Normalisierter y-Wert, eingetragen als 7. Element
+        new_data_batch[b, :, 8] = data_batch[b, :, 2]/max_room_z # Vermutung: Normalisierter z-Wert, eingetragen als 8. Element
+        minx = min(data_batch[b, :, 0]) # Vermutung: hier wird jetzt der minimale Wert genommen von allen x-Werten
+        miny = min(data_batch[b, :, 1]) # Vermutung: hier wird jetzt der minimale Wert genommen von allen y-Werten
         data_batch[b, :, 0] -= (minx+block_size/2)
         data_batch[b, :, 1] -= (miny+block_size/2)
-    new_data_batch[:, :, 0:6] = data_batch
+    new_data_batch[:, :, 0:6] = data_batch # Vermutung: hier werden die Daten uebernommen von x, y, z, r, g, b
     return new_data_batch, label_batch
 
 
@@ -256,8 +281,10 @@ def room2blocks_wrapper_normalized(data_label_filename, num_point, block_size=1.
     if data_label_filename[-3:] == 'txt':
         data_label = np.loadtxt(data_label_filename)
     elif data_label_filename[-3:] == 'npy':
+        #print("npy format is used")
         data_label = np.load(data_label_filename)
-    else:
+        #print(f"npy file data_label: {data_label}")
+    else: # es muss wohl txt oder npy file type sein
         print('Unknown file type! exiting.')
         exit()
     return room2blocks_plus_normalized(data_label, num_point, block_size, stride,
