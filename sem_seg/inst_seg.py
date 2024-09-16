@@ -24,12 +24,12 @@ import matplotlib.pyplot as plt
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def create_pointcloud_from_txt_file(path_to_txt_file):
+def create_pointcloud_from_txt_file(txt_file_path):
     """
     Erzeugt eine Punktwolke (PointCloud) aus einer .txt-Datei und weist ihr Positionen, Farben und semantische Labels zu.
 
     Args:
-        path_to_txt_file (str): Pfad zur .txt-Datei, die die Punktinformationen enthält. 
+        txt_file_path (str): Pfad zur .txt-Datei, die die Punktinformationen enthält. 
             Die Datei sollte die folgenden Spalten enthalten:
             - Spalte 0-2: x, y, z-Koordinaten (Positionen der Punkte).
             - Spalte 3-5: r, g, b-Werte (Farbe der Punkte).
@@ -38,8 +38,8 @@ def create_pointcloud_from_txt_file(path_to_txt_file):
     Returns:
         open3d.t.geometry.PointCloud: Eine PointCloud mit gefüllten Punkten, Farben und semantischen Labels.
     """
-    txt_file_positions = np.loadtxt(path_to_txt_file, usecols = (0, 1, 2), dtype=np.float64)
-    txt_file_attributes = np.loadtxt(path_to_txt_file, usecols = (3, 4, 5, 7), dtype=np.uint8)
+    txt_file_positions = np.loadtxt(txt_file_path, usecols = (0, 1, 2), dtype=np.float64)
+    txt_file_attributes = np.loadtxt(txt_file_path, usecols = (3, 4, 5, 7), dtype=np.uint8)
     pcd = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
     pcd.point.positions = txt_file_positions[:, 0:3] # fuellt sie mit Punkten
     pcd.point.colors = txt_file_attributes[:, 0:3] # fuellt sie mit Attribut: Farbe
@@ -53,6 +53,45 @@ def visualize_pointcloud(pcd, zoom=0.3412, front=[0.4257, -0.2125, -0.8795], loo
                                     front=front,
                                     lookat=lookat,
                                     up=up)
+
+def save_pointcloud_to_ply(inst_seg_pcd_np, file_path):
+    # create pointcloud
+    pcd_extended = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
+    pcd_extended.point.positions = inst_seg_pcd_np[:, 0:3] # fuellt sie mit Punkten
+    pcd_extended.point.colors = (inst_seg_pcd_np[:, 3:6]).astype(np.uint8) # fuellt sie mit Attribut: Farbe
+    pcd_extended.point.sem_label = (inst_seg_pcd_np[:, 6]).astype(np.uint8) # fuellt sie mit Attribut: semantischen Label
+    pcd_extended.point.inst_label = (inst_seg_pcd_np[:, 7]).astype(np.uint8)
+    #visualize_pointcloud(pcd_extended)
+    # problem: beim Speichern mit write_point_cloud werden nur positions und colors gespeichert...
+
+    # Visualization of instance segmentation
+    file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
+    file_path += "_extended.ply"
+    # o3d.io.write_point_cloud(filename=file_path, pointcloud=pcd_extended.to_legacy(), write_ascii=True)
+    return pcd_extended
+
+# create colors for visualization of the instance segmentation results
+def create_colors_for_instance_seg_vis(num_labels):
+    #max_label = labels.max().item()
+    cmap = plt.get_cmap("viridis", num_labels)
+    colors = cmap(np.arange(num_labels))
+    colors = (colors[:, :3] * 255).astype(np.uint8)
+    #print(f"colors.shape: {colors.shape}")
+    return colors
+
+# create pointcloud to show instance segmentation results
+def create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors):
+    pcd_extended = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
+    pcd_extended.point.positions = inst_seg_pcd_np[:, 0:3] # fuellt sie mit Punkten
+    inst_labels = (inst_seg_pcd_np[:, 7]).astype(np.uint8)
+    pcd_extended.point.colors = colors[inst_labels, :]
+    return pcd_extended
+
+# visualize instance segmentation results as a pointcloud
+def vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np):
+    colors = create_colors_for_instance_seg_vis(inst_label_counter+1)
+    pcd = create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors)
+    visualize_pointcloud(pcd.to_legacy())
 
 
 def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
@@ -84,59 +123,20 @@ def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
             #labels[labels.astype(int) == -1] = -1
     return (inst_seg_pcd_np, labels, inst_label_counter)
 
-path_to_txt_files = os.path.join(BASE_DIR, "log6/dump")
+txt_dir_path = os.path.join(BASE_DIR, "log6/dump")
 txt_file_name = "Area_6_lounge_1_pred.txt"
-path_to_txt_file = os.path.join(path_to_txt_files, txt_file_name)
+txt_file_path = os.path.join(txt_dir_path, txt_file_name)
 
-
-#pcd = create_pointcloud_from_txt_file(path_to_txt_file)
+#pcd = create_pointcloud_from_txt_file(txt_file_path)
 #visualize_pointcloud(pcd)
         
 # load data from txt file in a numpy array and run instance segmentation
-pcd_np = np.loadtxt(path_to_txt_file, usecols = (0, 1, 2, 3, 4, 5, 7))
+pcd_np = np.loadtxt(txt_file_path, usecols = (0, 1, 2, 3, 4, 5, 7))
 inst_seg_pcd_np, labels, inst_label_counter = inst_seg_with_dbscan(pcd_np)
 
-
 # store results as txt file
-file_path = os.path.join(path_to_txt_files, txt_file_name[:-4])
+file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
 file_path += "_extended.txt"
 np.savetxt(file_path, inst_seg_pcd_np)
 
-# create pointcloud
-pcd_extended = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
-pcd_extended.point.positions = inst_seg_pcd_np[:, 0:3] # fuellt sie mit Punkten
-pcd_extended.point.colors = (inst_seg_pcd_np[:, 3:6]).astype(np.uint8) # fuellt sie mit Attribut: Farbe
-pcd_extended.point.sem_label = (inst_seg_pcd_np[:, 6]).astype(np.uint8) # fuellt sie mit Attribut: semantischen Label
-pcd_extended.point.inst_label = (inst_seg_pcd_np[:, 7]).astype(np.uint8)
-#visualize_pointcloud(pcd_extended)
-
-# Visualization of instance segmentation
-file_path = os.path.join(path_to_txt_files, txt_file_name[:-4])
-file_path += "_extended.ply"
-# o3d.io.write_point_cloud(filename=file_path, pointcloud=pcd_extended.to_legacy(), write_ascii=True)
-
-# create colors for visualization
-max_label = labels.max().item()
-cmap = plt.get_cmap("viridis", inst_label_counter+1)
-colors = cmap(np.arange(inst_label_counter))
-colors = (colors[:, :3] * 255).astype(np.uint8)
-print(f"colors.shape: {colors.shape}")
-
-pcd_extended = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
-pcd_extended.point.positions = inst_seg_pcd_np[:, 0:3] # fuellt sie mit Punkten
-inst_labels = (inst_seg_pcd_np[:, 7]).astype(np.uint8)
-pcd_extended.point.colors = colors[inst_labels, :]
-visualize_pointcloud(pcd_extended.to_legacy())
-
-
-
-        
-    
-
-
-
-
-
-
-
-
+vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np)
