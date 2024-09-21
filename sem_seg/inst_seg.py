@@ -294,8 +294,8 @@ inst_seg_pcd_np, inst_label_counter = inst_seg_with_dbscan(pcd_np, min_points=10
 
 # store results as txt file
 file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
-file_path += "_extended.txt"
-#np.savetxt(file_path, inst_seg_pcd_np) # wieder einkommentieren
+file_path_inst_seg_result = file_path + "_extended.txt"
+np.savetxt(file_path_inst_seg_result, inst_seg_pcd_np) # wieder einkommentieren
 
 vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np)
 
@@ -314,7 +314,7 @@ print(f"inst_label_counter: {inst_label_counter}")
 #print(f"number of oids: {number_oid}")
 
 # Schritt 0: entferne noise
-inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_np, noise_label=0, outlier_removal_threshold=100)
+inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_np, noise_label=0, outlier_removal_threshold=200)
 
 # inst_ids = inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8)
 # number_unique_instances = len(set(inst_ids.flatten()))
@@ -328,31 +328,26 @@ inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_n
 # Schritt 5: Instanz IDs nochmal neu bestimmen oder so lassen (je nachdem, womit man leichter arbeiten kann)
 
 # Visualisierung der Postprocessed PointCloud
-sem_labels = inst_seg_pcd_np_postprocessed[:, 6].astype(np.uint8)
-sem_labels = sorted(set(sem_labels.flatten()))
-# def renumber_instance_ids(pcd_np, start_inst_label=0):
-#     inst_ids = pcd_np[:, 7].astype(np.uint8)
+
+# Visualisierung basierend auf den einzelnen semantischen Klassen
+# sem_labels = inst_seg_pcd_np_postprocessed[:, 6].astype(np.uint8)
+# sem_labels = sorted(set(sem_labels.flatten()))
+
+# for sem_label in sem_labels: 
+#     part_pcd_np = inst_seg_pcd_np_postprocessed[inst_seg_pcd_np_postprocessed[:, 6]==sem_label, :]
+#     renumbered_part_pcd_np = renumber_instance_ids(part_pcd_np, start_inst_label=0)
+#     inst_ids = renumbered_part_pcd_np[:, 7].astype(np.uint8)
 #     unique_inst_ids = set(inst_ids.flatten())
 #     number_unique_instances = len(unique_inst_ids)
-#     new_inst_label = start_inst_label
-#     renumbered_pcd_np = pcd_np.copy()
-#     for inst_id in unique_inst_ids:
-#         mask = pcd_np[:, 7].astype(np.uint8) == inst_id
-#         renumbered_pcd_np[mask, 7] = new_inst_label
-#         new_inst_label += 1
-#     return renumbered_pcd_np
-for sem_label in sem_labels: 
-    part_pcd_np = inst_seg_pcd_np_postprocessed[inst_seg_pcd_np_postprocessed[:, 6]==sem_label, :]
-    renumbered_part_pcd_np = renumber_instance_ids(part_pcd_np, start_inst_label=0)
-    inst_ids = renumbered_part_pcd_np[:, 7].astype(np.uint8)
-    unique_inst_ids = set(inst_ids.flatten())
-    number_unique_instances = len(unique_inst_ids)
-    print(f"unique_inst_ids: {unique_inst_ids}")
-    print(f"number_unique_instances: {number_unique_instances}")
-    vis_instance_seg_results(inst_label_counter=number_unique_instances, inst_seg_pcd_np=renumbered_part_pcd_np)
+#     #print(f"unique_inst_ids: {unique_inst_ids}")
+#     #print(f"number_unique_instances: {number_unique_instances}")
+#     vis_instance_seg_results(inst_label_counter=number_unique_instances, inst_seg_pcd_np=renumbered_part_pcd_np)
 
 vis_instance_seg_results(inst_label_counter=len(set(inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8).flatten())), inst_seg_pcd_np=inst_seg_pcd_np_postprocessed)
 
-
+# save pointcloud (instance segmentation + postprocessing)
+file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
+file_path_inst_seg_result = file_path + "_extended_postprocessed.txt"
+np.savetxt(file_path_inst_seg_result, inst_seg_pcd_np_postprocessed)
 
 
