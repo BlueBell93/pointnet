@@ -278,15 +278,53 @@ def remove_noise_from_point_cloud(pcd_np, noise_label):
     inst_seg_pcd_np_without_noise = pcd_np[pcd_np[:, 7].astype(np.uint8) != noise_label, :]
     return inst_seg_pcd_np_without_noise
 
-def postprocess_instance_segmentation(pcd_np, noise_label):
-    pcd_np_without_noise = remove_noise_from_point_cloud(pcd_np, noise_label) # noise removal: alles, was dbscan als noise eingeordnet hat (label -1 -> 0)
-    inst_ids = pcd_np_without_noise[:, 7].astype(np.uint8)
+def remove_outlier_from_point_cloud(pcd_np, outlier_removal_threshold): 
+    inst_ids = pcd_np[:, 7].astype(np.uint8)
     number_unique_instances = len(set(inst_ids.flatten()))
-    print(f"oid: {set(inst_ids.flatten())}")
-    print(f"oid after noise_processing: {len(inst_ids)}")
-    print(f"number of oids after noise processing: {number_unique_instances}")
+    #print(f"oid: {set(inst_ids.flatten())}")
+    #print(f"number of oids after noise processing: {number_unique_instances}")
+    num_removed_outliers = 0
+    for inst_id in set(inst_ids.flatten()):
+        mask = pcd_np[:, 7] == inst_id
+        numb_points_instance = np.sum(mask)
+        mask_invert = np.invert(mask)
+        if numb_points_instance <= outlier_removal_threshold:
+            print(f"inst_id of removed outlier: {inst_id}")
+            pcd_np = pcd_np[mask_invert, :]
+            num_removed_outliers += 1
+    print(f"num_removed_outliers: {num_removed_outliers}")
+    return pcd_np
 
-postprocess_instance_segmentation(inst_seg_pcd_np, noise_label=0)
+def renumber_instance_ids(pcd_np):
+    inst_ids = pcd_np[:, 7].astype(np.uint8)
+    unique_inst_ids = set(inst_ids.flatten())
+    number_unique_instances = len(unique_inst_ids)
+    new_inst_label = 0
+    renumbered_pcd_np = pcd_np.copy()
+    for inst_id in unique_inst_ids:
+        print(inst_id)
+        mask = pcd_np[:, 7].astype(np.uint8) == inst_id
+        renumbered_pcd_np[mask, 7] = new_inst_label
+        new_inst_label += 1
+    return renumbered_pcd_np
+
+
+def postprocess_instance_segmentation(pcd_np, noise_label, outlier_removal_threshold):
+    # noise removal
+    pcd_np_without_noise = remove_noise_from_point_cloud(pcd_np, noise_label) # noise removal: alles, was dbscan als noise eingeordnet hat (label -1 -> 0)
+    # outlier removal
+    pcd_np_postprocessed = remove_outlier_from_point_cloud(pcd_np_without_noise, outlier_removal_threshold)
+    pcd_np_postprocessed = renumber_instance_ids(pcd_np_postprocessed)
+    return pcd_np_postprocessed
+    
+
+inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_np, noise_label=0, outlier_removal_threshold=100)
+
+inst_ids = inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8)
+number_unique_instances = len(set(inst_ids.flatten()))
+print(f"inst_ids: {set(inst_ids.flatten())}")
+print(f"number_unique_instances: {number_unique_instances}") 
+vis_instance_seg_results(inst_label_counter=len(set(inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8).flatten())), inst_seg_pcd_np=inst_seg_pcd_np_postprocessed)
 
 # Schritt 1: Iteriere über alle Instanzen
 #   Schritt 2: Filtere die Punkte, die zu einer Instanz gehoeren
