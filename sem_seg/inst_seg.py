@@ -142,7 +142,7 @@ def vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np):
     Returns:
         None
     """
-    colors = create_colors_for_instance_seg_vis(inst_label_counter+2) # +2 because for noise (label -1) + index 0
+    colors = create_colors_for_instance_seg_vis(inst_label_counter) # +2 because for noise (label -1) + index 0
     #pcd_np = inst_seg_pcd_np.copy()
     #pcd_np[pcd_np[:, 7].astype(int) == -1, 7] = inst_label_counter + 1
     pcd = create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors)
@@ -180,10 +180,16 @@ def update_instance_labels(labels, inst_label_noise, inst_label_counter):
     """
     labels[labels.astype(int) == -1] = inst_label_noise
     max_label = labels.max()
-    for dbscan_cluster in range(max_label+1):
-        labels[labels.astype(int) == dbscan_cluster] = inst_label_counter
+    labels_updated = labels.copy()
+    for dbscan_cluster in range(1, max_label+1):
+        # if inst_label_counter == 7:
+        #     print(f"len(labels[labels.astype(int) == dbscan_cluster]): {np.sum(labels.astype(int) == dbscan_cluster)}")
+        mask = labels.astype(int) == dbscan_cluster
+        labels_updated[mask] = inst_label_counter
+        #labels[labels.astype(int) == dbscan_cluster] = inst_label_counter
         inst_label_counter += 1
-    return (labels, inst_label_counter)
+    print(f"labels: {set(labels)}")
+    return (labels_updated, inst_label_counter)
 
 def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
     """
@@ -220,9 +226,14 @@ def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
             #inst_seg_column = pcd_np[:, 7].astype(int)
             pcd_np_without_updated_instance_labels[pcd_np_without_updated_instance_labels[:, 7].astype(int) == -1, 7] = labels.max() + 1
             print(f"labels.max is {labels.max()+1} for semantic category {semantic_cls}")
-            vis_instance_seg_results(inst_label_counter=labels.max(), inst_seg_pcd_np=pcd_np_without_updated_instance_labels) # Visualisierung Teilsegmentierungen
+            vis_instance_seg_results(inst_label_counter=labels.max() + 2, inst_seg_pcd_np=pcd_np_without_updated_instance_labels) # Visualisierung Teilsegmentierungen
             # end of visualization
-            labels[labels.astype(int) == -1] = inst_label_noise
+            #print(f"labels before: {labels}")
+            labels = np.add(labels, 1)
+            #print(f"labels after: {labels}")
+            #labels[labels.astype(int) == -1] = inst_label_noise
+            print(f"labels.max(): {labels.max()}")
+            #inst_label_counter += labels.max()
             labels, inst_label_counter = update_instance_labels(labels, inst_label_noise, inst_label_counter)
             result = np.concatenate((semantically_filtered_pcd, np.reshape(labels, (len(labels), 1))), axis=1)
             inst_seg_pcd_np = np.vstack((inst_seg_pcd_np, result))
@@ -239,7 +250,7 @@ pcd = create_pointcloud_from_txt_file(txt_file_path)
         
 # load data from txt file in a numpy array and run instance segmentation
 pcd_np = np.loadtxt(txt_file_path, usecols = (0, 1, 2, 3, 4, 5, 7))
-inst_seg_pcd_np, inst_label_counter = inst_seg_with_dbscan(pcd_np, min_points=10, eps=0.4)
+inst_seg_pcd_np, inst_label_counter = inst_seg_with_dbscan(pcd_np, min_points=10, eps=0.2)
 
 # store results as txt file
 file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
