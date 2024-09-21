@@ -13,6 +13,7 @@
 #   Schritt 3.1: wende dbscan an
 #   Schritt 3.2: verwalte die Ergebnisse
 # Schritt 4: bilde wieder eine einzige Punktwolke (hier muss darauf geachtet werden, die labels konsistent zu halten)
+# neue ToDos: Noise entfernen, d.h. Instanzen mit wenigen Punkten, da diese nicht aussagekräftig sind, d.h. visuell nicht als Objekt erkennbar sind
 
 
 import os
@@ -141,7 +142,9 @@ def vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np):
     Returns:
         None
     """
-    colors = create_colors_for_instance_seg_vis(inst_label_counter+1)
+    colors = create_colors_for_instance_seg_vis(inst_label_counter+2) # +2 because for noise (label -1) + index 0
+    #pcd_np = inst_seg_pcd_np.copy()
+    #pcd_np[pcd_np[:, 7].astype(int) == -1, 7] = inst_label_counter + 1
     pcd = create_pointcloud_for_instance_seg_vis(inst_seg_pcd_np, colors)
     visualize_pointcloud(pcd.to_legacy())
 
@@ -207,14 +210,19 @@ def inst_seg_with_dbscan(pcd_np, num_sem_cls=13, eps=0.4, min_points=10):
 
         labels = apply_dbscan_to_semantic_category(semantically_filtered_pcd, eps, min_points)
         #print(f"labels of dbscan: {labels}")
-
+        if len(labels) == 0:
+            print(f"not available semantic_cls is: {semantic_cls}")
         if len(labels) > 0: 
             # only for visualization of part instance segmented results
-            labels[labels.astype(int) == -1] = inst_label_noise
+            #print(f"labels of dbscan: {labels}")
             result_without_updated_instance_labels = np.concatenate((semantically_filtered_pcd, np.reshape(labels, (len(labels), 1))), axis=1)
+            pcd_np_without_updated_instance_labels = result_without_updated_instance_labels.copy()
+            #inst_seg_column = pcd_np[:, 7].astype(int)
+            pcd_np_without_updated_instance_labels[pcd_np_without_updated_instance_labels[:, 7].astype(int) == -1, 7] = labels.max() + 1
             print(f"labels.max is {labels.max()+1} for semantic category {semantic_cls}")
-            vis_instance_seg_results(inst_label_counter=labels.max(), inst_seg_pcd_np=result_without_updated_instance_labels)
+            vis_instance_seg_results(inst_label_counter=labels.max(), inst_seg_pcd_np=pcd_np_without_updated_instance_labels) # Visualisierung Teilsegmentierungen
             # end of visualization
+            labels[labels.astype(int) == -1] = inst_label_noise
             labels, inst_label_counter = update_instance_labels(labels, inst_label_noise, inst_label_counter)
             result = np.concatenate((semantically_filtered_pcd, np.reshape(labels, (len(labels), 1))), axis=1)
             inst_seg_pcd_np = np.vstack((inst_seg_pcd_np, result))
@@ -226,16 +234,33 @@ txt_dir_path = os.path.join(BASE_DIR, "log6/dump")
 txt_file_name = "Area_6_lounge_1_pred.txt"
 txt_file_path = os.path.join(txt_dir_path, txt_file_name)
 
-#pcd = create_pointcloud_from_txt_file(txt_file_path)
-#visualize_pointcloud(pcd)
+pcd = create_pointcloud_from_txt_file(txt_file_path)
+# visualize_pointcloud(pcd.to_legacy()) # Visualisierung der Pointcloud mit korrekten Farben
         
 # load data from txt file in a numpy array and run instance segmentation
 pcd_np = np.loadtxt(txt_file_path, usecols = (0, 1, 2, 3, 4, 5, 7))
-inst_seg_pcd_np, inst_label_counter = inst_seg_with_dbscan(pcd_np)
+inst_seg_pcd_np, inst_label_counter = inst_seg_with_dbscan(pcd_np, min_points=10, eps=0.4)
 
 # store results as txt file
 file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
 file_path += "_extended.txt"
-np.savetxt(file_path, inst_seg_pcd_np)
+#np.savetxt(file_path, inst_seg_pcd_np) # wieder einkommentieren
 
 vis_instance_seg_results(inst_label_counter, inst_seg_pcd_np)
+
+# postprocessing: remove outlier
+# outlier removal: das Entfernen von Instanzen, die nur wenige PUnkte enthalten und visuell nicht als Objekt erkennbar sind
+# Outlier Removal, da Gruppen von Punkten oder Punkte entfernt werden, die fuer die Instanzsegmentierung nicht als relevant betrachtet werden
+# Instanzen mit wenigen Punkten sind dann halt nicht-vollständige Objekte, die beim 3dssg eher zu Verwirrung fuehren
+# daher werden sie jetzt entfernt
+
+print(f"inst_label_counter: {inst_label_counter}")
+oid = inst_seg_pcd_np[:, 7].astype(np.uint8)
+oid = set(oid.flatten())
+print(f"oid: {oid}")
+print(f"number of oids: {len(oid)}")
+# Schritt 1: Iteriere über alle Instanzen
+#   Schritt 2: Filtere die Punkte, die zu einer Instanz gehoeren
+#   Schritt 3: Anzahl der Punkte berechnen
+#   Schritt 4: Wenn Anzahl Punkte < Soll-Wert, dann Entferne alle Punkte der Instanz
+# Schritt 5: Instanz IDs nochmal neu bestimmen oder so lassen (je nachdem, womit man leichter arbeiten kann)
