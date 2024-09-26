@@ -257,7 +257,11 @@ def remove_outlier_from_point_cloud(pcd_np, outlier_removal_threshold):
             print(f"inst_id of removed outlier: {inst_id}")
             pcd_np = pcd_np[mask_invert, :]
             num_removed_outliers += 1
-    print(f"num_removed_outliers: {num_removed_outliers}")
+    #print(f"num_removed_outliers: {num_removed_outliers}")
+    inst_ids = pcd_np[:, 7].astype(np.uint8)
+    number_unique_instances = len(set(inst_ids.flatten()))
+    #print(f"inst_ids: {set(inst_ids.flatten())}")
+    #print(f"number_unique_instances: {number_unique_instances}")
     return pcd_np
 
 def renumber_instance_ids(pcd_np, start_inst_label=0):
@@ -265,11 +269,13 @@ def renumber_instance_ids(pcd_np, start_inst_label=0):
     unique_inst_ids = set(inst_ids.flatten())
     number_unique_instances = len(unique_inst_ids)
     new_inst_label = start_inst_label
+    #print(f"len unique_inst_ids: {len(unique_inst_ids)}")
     renumbered_pcd_np = pcd_np.copy()
     for inst_id in unique_inst_ids:
         mask = pcd_np[:, 7].astype(np.uint8) == inst_id
         renumbered_pcd_np[mask, 7] = new_inst_label
         new_inst_label += 1
+    #print(f"renumbered instance ids: {set(renumbered_pcd_np[:, 7].astype(np.uint8).flatten())}")
     return renumbered_pcd_np
 
 
@@ -313,7 +319,7 @@ print(f"inst_label_counter: {inst_label_counter}")
 #print(f"oid: {len(oid)}")
 #print(f"number of oids: {number_oid}")
 
-# Schritt 0: entferne noise
+# Schritt 0: entferne noise und outliers, renumbere die Instanzlabels von 0 bis (#Instanzen - 1)
 inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_np, noise_label=0, outlier_removal_threshold=200)
 
 # inst_ids = inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8)
@@ -330,6 +336,7 @@ inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_n
 # Visualisierung der Postprocessed PointCloud
 
 # Visualisierung basierend auf den einzelnen semantischen Klassen
+## Beginn Visualisierung einzelner semantischer Klassen
 # sem_labels = inst_seg_pcd_np_postprocessed[:, 6].astype(np.uint8)
 # sem_labels = sorted(set(sem_labels.flatten()))
 
@@ -342,12 +349,58 @@ inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_n
 #     #print(f"unique_inst_ids: {unique_inst_ids}")
 #     #print(f"number_unique_instances: {number_unique_instances}")
 #     vis_instance_seg_results(inst_label_counter=number_unique_instances, inst_seg_pcd_np=renumbered_part_pcd_np)
+## Ende Visualisierung semantischer Klassen
 
 vis_instance_seg_results(inst_label_counter=len(set(inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8).flatten())), inst_seg_pcd_np=inst_seg_pcd_np_postprocessed)
 
 # save pointcloud (instance segmentation + postprocessing)
 file_path = os.path.join(txt_dir_path, txt_file_name[:-4])
 file_path_inst_seg_result = file_path + "_extended_postprocessed.txt"
-np.savetxt(file_path_inst_seg_result, inst_seg_pcd_np_postprocessed)
+#np.savetxt(file_path_inst_seg_result, inst_seg_pcd_np_postprocessed)
+
+# Visualisierung jedes einzelnen Objekts
+# das Objekt bekomme eine Farbe X, alle anderen Punkte bekommen Farbe Y
+
+# Schritt 0: Farbe auswahlen, Instanzen (Labels) ermitteln
+#colors = create_colors_for_instance_seg_vis(num_labels=2)
+cls_names = [
+"ceiling",
+"floor",
+"wall",
+"beam",
+"column",
+"window",
+"door",
+"table",
+"chair",
+"sofa",
+"bookcase",
+"board",
+"clutter"
+]
+color_instance = np.array([31, 119, 180]).astype(np.uint8) # [ 31 119 180] blauton
+color_rest = np.array([171, 173, 161]).astype(np.uint8) # grau-gelber Ton    #[158 218 229]
+colors = np.array([color_rest, color_instance])
+instances = set(inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8).flatten())
+# Schritt 1: gehe jedes Objekt durch
+for instance_label in instances:
+    #print(f"instance_label: {instance_label}")
+#   Schritt 2: es sollte bereits zwei feste Farben geben für Instanz mit Label x und für den Rest der Punkte y
+#   Schritt 3: erzeuge eine Open3D Datenstruktur 
+    pcd = o3d.t.geometry.PointCloud() # erstellt eine leere PointCloud
+    pcd.point.positions = inst_seg_pcd_np_postprocessed[:, 0:3] # fuellt sie mit Punkten
+    color_picker = (inst_seg_pcd_np_postprocessed[:, 7] == instance_label) # .astype(np.uint8)
+    point_colors = np.tile(colors[0], (inst_seg_pcd_np_postprocessed.shape[0], 1))
+    point_colors[color_picker] = colors[1]
+    pcd.point.colors = point_colors
+#   Schritt 4: gebe allen Punkten die Farbe Y
+#   Schritt 5: gebe allen Punkten mit Instanzlabel x die Farbe X
+#   Schritt 6: Visualisiere die Pointcloud
+    sem_label = ((inst_seg_pcd_np_postprocessed[color_picker, 6])[0]).astype(np.uint8)
+    print(f"sem_label: {sem_label}")
+    print(f"cls_name: {cls_names[sem_label]}")
+    visualize_pointcloud(pcd.to_legacy())
+#   Schritt 7: Zeige auch das semantische Label (als kleine Orientierung)
+# Ende Visualisierung jedes einzelnen Objekts
 
 
