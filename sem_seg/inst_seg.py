@@ -292,7 +292,7 @@ txt_file_name = "Area_6_lounge_1_pred.txt"
 txt_file_path = os.path.join(txt_dir_path, txt_file_name)
 
 pcd = create_pointcloud_from_txt_file(txt_file_path)
-# visualize_pointcloud(pcd.to_legacy()) # Visualisierung der Pointcloud mit korrekten Farben
+visualize_pointcloud(pcd.to_legacy()) # Visualisierung der Pointcloud mit korrekten Farben
         
 # load data from txt file in a numpy array and run instance segmentation
 pcd_np = np.loadtxt(txt_file_path, usecols = (0, 1, 2, 3, 4, 5, 7))
@@ -337,18 +337,18 @@ inst_seg_pcd_np_postprocessed = postprocess_instance_segmentation(inst_seg_pcd_n
 
 # Visualisierung basierend auf den einzelnen semantischen Klassen
 ## Beginn Visualisierung einzelner semantischer Klassen
-# sem_labels = inst_seg_pcd_np_postprocessed[:, 6].astype(np.uint8)
-# sem_labels = sorted(set(sem_labels.flatten()))
+sem_labels = inst_seg_pcd_np_postprocessed[:, 6].astype(np.uint8)
+sem_labels = sorted(set(sem_labels.flatten()))
 
-# for sem_label in sem_labels: 
-#     part_pcd_np = inst_seg_pcd_np_postprocessed[inst_seg_pcd_np_postprocessed[:, 6]==sem_label, :]
-#     renumbered_part_pcd_np = renumber_instance_ids(part_pcd_np, start_inst_label=0)
-#     inst_ids = renumbered_part_pcd_np[:, 7].astype(np.uint8)
-#     unique_inst_ids = set(inst_ids.flatten())
-#     number_unique_instances = len(unique_inst_ids)
-#     #print(f"unique_inst_ids: {unique_inst_ids}")
-#     #print(f"number_unique_instances: {number_unique_instances}")
-#     vis_instance_seg_results(inst_label_counter=number_unique_instances, inst_seg_pcd_np=renumbered_part_pcd_np)
+for sem_label in sem_labels: 
+    part_pcd_np = inst_seg_pcd_np_postprocessed[inst_seg_pcd_np_postprocessed[:, 6]==sem_label, :]
+    renumbered_part_pcd_np = renumber_instance_ids(part_pcd_np, start_inst_label=0)
+    inst_ids = renumbered_part_pcd_np[:, 7].astype(np.uint8)
+    unique_inst_ids = set(inst_ids.flatten())
+    number_unique_instances = len(unique_inst_ids)
+    #print(f"unique_inst_ids: {unique_inst_ids}")
+    #print(f"number_unique_instances: {number_unique_instances}")
+    vis_instance_seg_results(inst_label_counter=number_unique_instances, inst_seg_pcd_np=renumbered_part_pcd_np)
 ## Ende Visualisierung semantischer Klassen
 
 vis_instance_seg_results(inst_label_counter=len(set(inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8).flatten())), inst_seg_pcd_np=inst_seg_pcd_np_postprocessed)
@@ -384,6 +384,8 @@ colors = np.array([color_rest, color_instance])
 instances = set(inst_seg_pcd_np_postprocessed[:, 7].astype(np.uint8).flatten())
 # Schritt 1: gehe jedes Objekt durch
 for instance_label in instances:
+    print(f"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    print(f"instance_label: {instance_label}")
     #print(f"instance_label: {instance_label}")
 #   Schritt 2: es sollte bereits zwei feste Farben geben für Instanz mit Label x und für den Rest der Punkte y
 #   Schritt 3: erzeuge eine Open3D Datenstruktur 
